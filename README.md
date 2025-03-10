@@ -39,32 +39,8 @@ python src/main.py
 
 The server communicates through standard input/output streams using the Model Context Protocol (MCP).
 
-### Protocol
-
-The server accepts JSON messages in the following format:
-
-```json
-{
-    "name": "tool_name",
-    "arguments": {
-        "arg1": "value1",
-        "arg2": "value2"
-    }
-}
-```
-
-The server responds with JSON messages in this format:
-
-```json
-{
-    "type": "text",
-    "text": "Response text"
-}
-```
-
 ### Available Tools
 
-- `list_tools`: List all available tools
 - `create_session`: Create a new WhatsApp session
 - `get_qr_code`: Get a QR code for authentication
 - `authenticate`: Authenticate using a QR code
@@ -73,46 +49,6 @@ The server responds with JSON messages in this format:
 - `get_chats`: Get a list of chats
 - `create_group`: Create a new WhatsApp group
 - `get_group_participants`: Get the participants of a group
-
-### Example
-
-To create a session:
-
-```json
-{
-    "name": "create_session",
-    "arguments": {
-        "session_id": "my_session"
-    }
-}
-```
-
-To get a QR code for authentication:
-
-```json
-{
-    "name": "get_qr_code",
-    "arguments": {
-        "session_id": "my_session"
-    }
-}
-```
-
-To send a message:
-
-```json
-{
-    "name": "send_message",
-    "arguments": {
-        "session_id": "my_session",
-        "chat_id": "1234567890@c.us",
-        "content": {
-            "type": "text",
-            "text": "Hello, world!"
-        }
-    }
-}
-```
 
 ## How to add it to Claude Code
 
@@ -126,13 +62,12 @@ $ claude mcp add <name> <command> [args...]
 $ claude mcp add whatsapp -- python /path/to/src/main.py
 ```
 
-## Example Client
+Then you can interact with it in Claude with commands like:
 
-An example client implementation is provided in the `examples/client.py` file. You can run it to see how to interact with the server:
-
-```bash
-cd examples
-python client.py
+```
+/tool whatsapp create_session --session_id my_session
+/tool whatsapp get_qr_code
+/tool whatsapp send_message --chat_id "1234567890@c.us" --content '{"type":"text","text":"Hello"}'
 ```
 
 ## Development

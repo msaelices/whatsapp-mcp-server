@@ -4,13 +4,13 @@ import asyncio
 import json
 import logging
 import sys
-from typing import Any, Dict, List, Optional, Union
+from enum import Enum
+from typing import Any, Dict, List, Optional, TextIO, Union
 
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from whatsapp_mcp.models import (
-    CreateGroup, GroupParticipants, MCP_Message, MCP_MessageType,
-    SendMessage, TextContent, Tool, ToolCall
+    CreateGroup, GroupParticipants, SendMessage, TextContent, ToolCall
 )
 from whatsapp_mcp.modules import auth, group, message
 
@@ -22,237 +22,48 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+class Tool(BaseModel):
+    """Schema for tool definition."""
+    name: str
+    description: str
+    inputSchema: Dict[str, Any]
+
+
+class WhatsAppTools(str, Enum):
+    """WhatsApp MCP tools."""
+    LIST_TOOLS = "list_tools"
+    CREATE_SESSION = "create_session"
+    GET_QR_CODE = "get_qr_code"
+    AUTHENTICATE = "authenticate"
+    LOGOUT = "logout"
+    SEND_MESSAGE = "send_message"
+    GET_CHATS = "get_chats"
+    CREATE_GROUP = "create_group"
+    GET_GROUP_PARTICIPANTS = "get_group_participants"
+
+
 class MCPServer:
     """Model Context Protocol (MCP) Server for WhatsApp."""
     
-    def __init__(self):
+    def __init__(self, name: str = "whatsapp-mcp"):
+        self.name = name
         self.auth_manager = auth.auth_manager
         self.current_session_id: Optional[str] = None
+        self._tools: Dict[str, Tool] = {}
+        self._register_tools()
     
-    async def handle_input(self):
-        """Read from stdin and handle the input."""
-        while True:
-            try:
-                # Read a line from stdin
-                line = await asyncio.to_thread(sys.stdin.readline)
-                
-                if not line:
-                    break
-                
-                # Parse the JSON input
-                try:
-                    data = json.loads(line)
-                    message = MCP_Message.model_validate(data)
-                    await self.process_message(message)
-                except ValidationError as e:
-                    logger.error(f"Failed to parse message: {e}")
-                    await self.send_error("Failed to parse message")
-                except json.JSONDecodeError as e:
-                    logger.error(f"Failed to decode JSON: {e}")
-                    await self.send_error("Failed to decode JSON")
-                except Exception as e:
-                    logger.error(f"Error processing message: {e}")
-                    await self.send_error(f"Error: {str(e)}")
-            
-            except Exception as e:
-                logger.error(f"Unexpected error: {e}")
-                await self.send_error(f"Unexpected error: {str(e)}")
-    
-    async def process_message(self, message: MCP_Message):
-        """Process an MCP message."""
-        if message.type == MCP_MessageType.TEXT:
-            # Handle text message
-            if isinstance(message.content, TextContent):
-                text = message.content.text
-                await self.send_text(f"Received text: {text}")
-            else:
-                await self.send_error("Invalid text content")
-        
-        elif message.type == MCP_MessageType.TOOL_CALL:
-            # Handle tool call
-            if isinstance(message.content, ToolCall) or isinstance(message.content, dict):
-                if isinstance(message.content, dict):
-                    content = ToolCall.model_validate(message.content)
-                else:
-                    content = message.content
-                    
-                await self.handle_tool_call(content.name, content.arguments)
-            else:
-                await self.send_error("Invalid tool call content")
-    
-    async def handle_tool_call(self, name: str, arguments: Dict[str, Any]):
-        """Handle a tool call."""
-        try:
-            if name == "list_tools":
-                # Return list of available tools
-                tools = await self.list_tools()
-                await self.send_tool_result(tools)
-            
-            elif name == "create_session":
-                # Create a new session
-                session_id = arguments.get("session_id")
-                if not session_id:
-                    await self.send_error("session_id is required")
-                    return
-                
-                success, message = await self.auth_manager.create_session(session_id)
-                if success:
-                    self.current_session_id = session_id
-                    await self.send_tool_result({"success": True, "message": message})
-                else:
-                    await self.send_error(message)
-            
-            elif name == "get_qr_code":
-                # Get a QR code for authentication
-                session_id = arguments.get("session_id") or self.current_session_id
-                if not session_id:
-                    await self.send_error("No active session")
-                    return
-                
-                qr_code = await self.auth_manager.get_qr_code(session_id)
-                if qr_code:
-                    await self.send_tool_result(qr_code.model_dump())
-                else:
-                    await self.send_error("Failed to generate QR code")
-            
-            elif name == "authenticate":
-                # Authenticate using QR code
-                session_id = arguments.get("session_id") or self.current_session_id
-                qr_code = arguments.get("qr_code")
-                
-                if not session_id:
-                    await self.send_error("No active session")
-                    return
-                
-                if not qr_code:
-                    await self.send_error("qr_code is required")
-                    return
-                
-                success = await self.auth_manager.authenticate(session_id, qr_code)
-                if success:
-                    await self.send_tool_result({"success": True, "message": "Authentication successful"})
-                else:
-                    await self.send_error("Authentication failed")
-            
-            elif name == "logout":
-                # Logout from a session
-                session_id = arguments.get("session_id") or self.current_session_id
-                
-                if not session_id:
-                    await self.send_error("No active session")
-                    return
-                
-                success = await self.auth_manager.logout(session_id)
-                if success:
-                    if session_id == self.current_session_id:
-                        self.current_session_id = None
-                    await self.send_tool_result({"success": True, "message": "Logout successful"})
-                else:
-                    await self.send_error("Logout failed")
-            
-            elif name == "send_message":
-                # Send a message
-                session_id = arguments.get("session_id") or self.current_session_id
-                
-                if not session_id:
-                    await self.send_error("No active session")
-                    return
-                
-                try:
-                    send_message_args = SendMessage.model_validate(arguments)
-                    result = await message.send_message(
-                        session_id=session_id,
-                        chat_id=send_message_args.chat_id,
-                        content=send_message_args.content,
-                        reply_to=send_message_args.reply_to
-                    )
-                    await self.send_tool_result(result)
-                except ValidationError as e:
-                    await self.send_error(f"Invalid arguments: {e}")
-                except Exception as e:
-                    await self.send_error(f"Failed to send message: {e}")
-            
-            elif name == "get_chats":
-                # Get chats
-                session_id = arguments.get("session_id") or self.current_session_id
-                
-                if not session_id:
-                    await self.send_error("No active session")
-                    return
-                
-                limit = arguments.get("limit", 50)
-                offset = arguments.get("offset", 0)
-                
-                try:
-                    chats = await message.get_chats(
-                        session_id=session_id,
-                        limit=limit,
-                        offset=offset
-                    )
-                    await self.send_tool_result({"chats": chats})
-                except Exception as e:
-                    await self.send_error(f"Failed to get chats: {e}")
-            
-            elif name == "create_group":
-                # Create a group
-                session_id = arguments.get("session_id") or self.current_session_id
-                
-                if not session_id:
-                    await self.send_error("No active session")
-                    return
-                
-                try:
-                    create_group_args = CreateGroup.model_validate(arguments)
-                    result = await group.create_group(
-                        session_id=session_id,
-                        group_name=create_group_args.group_name,
-                        participants=create_group_args.participants
-                    )
-                    await self.send_tool_result(result.model_dump())
-                except ValidationError as e:
-                    await self.send_error(f"Invalid arguments: {e}")
-                except Exception as e:
-                    await self.send_error(f"Failed to create group: {e}")
-            
-            elif name == "get_group_participants":
-                # Get group participants
-                session_id = arguments.get("session_id") or self.current_session_id
-                
-                if not session_id:
-                    await self.send_error("No active session")
-                    return
-                
-                try:
-                    group_participants_args = GroupParticipants.model_validate(arguments)
-                    participants = await group.get_group_participants(
-                        session_id=session_id,
-                        group_id=group_participants_args.group_id
-                    )
-                    await self.send_tool_result({"participants": [p.model_dump() for p in participants]})
-                except ValidationError as e:
-                    await self.send_error(f"Invalid arguments: {e}")
-                except Exception as e:
-                    await self.send_error(f"Failed to get group participants: {e}")
-            
-            else:
-                await self.send_error(f"Unknown tool: {name}")
-        
-        except Exception as e:
-            logger.error(f"Error handling tool call: {e}")
-            await self.send_error(f"Error: {str(e)}")
-    
-    async def list_tools(self) -> List[Dict[str, Any]]:
-        """List available tools."""
+    def _register_tools(self):
+        """Register available tools."""
         tools = [
             Tool(
-                name="list_tools",
+                name=WhatsAppTools.LIST_TOOLS,
                 description="List available tools",
-                input_schema={}
+                inputSchema={}
             ),
             Tool(
-                name="create_session",
+                name=WhatsAppTools.CREATE_SESSION,
                 description="Create a new WhatsApp session",
-                input_schema={
+                inputSchema={
                     "type": "object",
                     "properties": {
                         "session_id": {"type": "string", "description": "ID for the session"}
@@ -261,9 +72,9 @@ class MCPServer:
                 }
             ),
             Tool(
-                name="get_qr_code",
+                name=WhatsAppTools.GET_QR_CODE,
                 description="Get a QR code for authentication",
-                input_schema={
+                inputSchema={
                     "type": "object",
                     "properties": {
                         "session_id": {"type": "string", "description": "ID of the session"}
@@ -271,9 +82,9 @@ class MCPServer:
                 }
             ),
             Tool(
-                name="authenticate",
+                name=WhatsAppTools.AUTHENTICATE,
                 description="Authenticate using QR code",
-                input_schema={
+                inputSchema={
                     "type": "object",
                     "properties": {
                         "session_id": {"type": "string", "description": "ID of the session"},
@@ -283,9 +94,9 @@ class MCPServer:
                 }
             ),
             Tool(
-                name="logout",
+                name=WhatsAppTools.LOGOUT,
                 description="Logout from a session",
-                input_schema={
+                inputSchema={
                     "type": "object",
                     "properties": {
                         "session_id": {"type": "string", "description": "ID of the session"}
@@ -293,14 +104,14 @@ class MCPServer:
                 }
             ),
             Tool(
-                name="send_message",
+                name=WhatsAppTools.SEND_MESSAGE,
                 description="Send a message to a chat",
-                input_schema=SendMessage.model_json_schema()
+                inputSchema=SendMessage.model_json_schema()
             ),
             Tool(
-                name="get_chats",
+                name=WhatsAppTools.GET_CHATS,
                 description="Get a list of chats",
-                input_schema={
+                inputSchema={
                     "type": "object",
                     "properties": {
                         "session_id": {"type": "string", "description": "ID of the session"},
@@ -310,55 +121,229 @@ class MCPServer:
                 }
             ),
             Tool(
-                name="create_group",
+                name=WhatsAppTools.CREATE_GROUP,
                 description="Create a new WhatsApp group",
-                input_schema=CreateGroup.model_json_schema()
+                inputSchema=CreateGroup.model_json_schema()
             ),
             Tool(
-                name="get_group_participants",
+                name=WhatsAppTools.GET_GROUP_PARTICIPANTS,
                 description="Get the participants of a WhatsApp group",
-                input_schema=GroupParticipants.model_json_schema()
+                inputSchema=GroupParticipants.model_json_schema()
             )
         ]
         
-        return [tool.model_dump() for tool in tools]
+        for tool in tools:
+            self._tools[tool.name] = tool
     
-    async def send_text(self, text: str):
-        """Send a text message."""
-        message = MCP_Message(
-            type=MCP_MessageType.TEXT,
-            content=TextContent(text=text)
-        )
-        await self.send_message(message)
+    async def list_tools(self) -> List[Tool]:
+        """List available tools."""
+        return list(self._tools.values())
     
-    async def send_tool_result(self, result: Union[Dict[str, Any], List[Dict[str, Any]]]):
-        """Send a tool result."""
-        message = MCP_Message(
-            type=MCP_MessageType.TOOL_RESULT,
-            content=result
-        )
-        await self.send_message(message)
+    async def call_tool(self, name: str, arguments: Dict[str, Any]) -> List[TextContent]:
+        """Call a tool with the given arguments."""
+        try:
+            match name:
+                case WhatsAppTools.LIST_TOOLS:
+                    tools = await self.list_tools()
+                    return [TextContent(type="text", text=json.dumps([tool.model_dump() for tool in tools]))]
+                
+                case WhatsAppTools.CREATE_SESSION:
+                    session_id = arguments.get("session_id")
+                    if not session_id:
+                        return [TextContent(type="text", text="Error: session_id is required")]
+                    
+                    success, message_text = await self.auth_manager.create_session(session_id)
+                    if success:
+                        self.current_session_id = session_id
+                        return [TextContent(type="text", text=f"Success: {message_text}")]
+                    else:
+                        return [TextContent(type="text", text=f"Error: {message_text}")]
+                
+                case WhatsAppTools.GET_QR_CODE:
+                    session_id = arguments.get("session_id") or self.current_session_id
+                    if not session_id:
+                        return [TextContent(type="text", text="Error: No active session")]
+                    
+                    qr_code = await self.auth_manager.get_qr_code(session_id)
+                    if qr_code:
+                        return [TextContent(type="text", text=json.dumps(qr_code.model_dump()))]
+                    else:
+                        return [TextContent(type="text", text="Error: Failed to generate QR code")]
+                
+                case WhatsAppTools.AUTHENTICATE:
+                    session_id = arguments.get("session_id") or self.current_session_id
+                    qr_code = arguments.get("qr_code")
+                    
+                    if not session_id:
+                        return [TextContent(type="text", text="Error: No active session")]
+                    
+                    if not qr_code:
+                        return [TextContent(type="text", text="Error: qr_code is required")]
+                    
+                    success = await self.auth_manager.authenticate(session_id, qr_code)
+                    if success:
+                        return [TextContent(type="text", text="Success: Authentication successful")]
+                    else:
+                        return [TextContent(type="text", text="Error: Authentication failed")]
+                
+                case WhatsAppTools.LOGOUT:
+                    session_id = arguments.get("session_id") or self.current_session_id
+                    
+                    if not session_id:
+                        return [TextContent(type="text", text="Error: No active session")]
+                    
+                    success = await self.auth_manager.logout(session_id)
+                    if success:
+                        if session_id == self.current_session_id:
+                            self.current_session_id = None
+                        return [TextContent(type="text", text="Success: Logout successful")]
+                    else:
+                        return [TextContent(type="text", text="Error: Logout failed")]
+                
+                case WhatsAppTools.SEND_MESSAGE:
+                    session_id = arguments.get("session_id") or self.current_session_id
+                    
+                    if not session_id:
+                        return [TextContent(type="text", text="Error: No active session")]
+                    
+                    try:
+                        send_message_args = SendMessage.model_validate(arguments)
+                        result = await message.send_message(
+                            session_id=session_id,
+                            chat_id=send_message_args.chat_id,
+                            content=send_message_args.content,
+                            reply_to=send_message_args.reply_to
+                        )
+                        return [TextContent(type="text", text=json.dumps(result))]
+                    except ValidationError as e:
+                        return [TextContent(type="text", text=f"Error: Invalid arguments: {e}")]
+                    except Exception as e:
+                        return [TextContent(type="text", text=f"Error: Failed to send message: {e}")]
+                
+                case WhatsAppTools.GET_CHATS:
+                    session_id = arguments.get("session_id") or self.current_session_id
+                    
+                    if not session_id:
+                        return [TextContent(type="text", text="Error: No active session")]
+                    
+                    limit = arguments.get("limit", 50)
+                    offset = arguments.get("offset", 0)
+                    
+                    try:
+                        chats = await message.get_chats(
+                            session_id=session_id,
+                            limit=limit,
+                            offset=offset
+                        )
+                        return [TextContent(type="text", text=json.dumps({"chats": chats}))]
+                    except Exception as e:
+                        return [TextContent(type="text", text=f"Error: Failed to get chats: {e}")]
+                
+                case WhatsAppTools.CREATE_GROUP:
+                    session_id = arguments.get("session_id") or self.current_session_id
+                    
+                    if not session_id:
+                        return [TextContent(type="text", text="Error: No active session")]
+                    
+                    try:
+                        create_group_args = CreateGroup.model_validate(arguments)
+                        result = await group.create_group(
+                            session_id=session_id,
+                            group_name=create_group_args.group_name,
+                            participants=create_group_args.participants
+                        )
+                        return [TextContent(type="text", text=json.dumps(result.model_dump()))]
+                    except ValidationError as e:
+                        return [TextContent(type="text", text=f"Error: Invalid arguments: {e}")]
+                    except Exception as e:
+                        return [TextContent(type="text", text=f"Error: Failed to create group: {e}")]
+                
+                case WhatsAppTools.GET_GROUP_PARTICIPANTS:
+                    session_id = arguments.get("session_id") or self.current_session_id
+                    
+                    if not session_id:
+                        return [TextContent(type="text", text="Error: No active session")]
+                    
+                    try:
+                        group_participants_args = GroupParticipants.model_validate(arguments)
+                        participants = await group.get_group_participants(
+                            session_id=session_id,
+                            group_id=group_participants_args.group_id
+                        )
+                        return [TextContent(type="text", text=json.dumps({"participants": [p.model_dump() for p in participants]}))]
+                    except ValidationError as e:
+                        return [TextContent(type="text", text=f"Error: Invalid arguments: {e}")]
+                    except Exception as e:
+                        return [TextContent(type="text", text=f"Error: Failed to get group participants: {e}")]
+                
+                case _:
+                    return [TextContent(type="text", text=f"Error: Unknown tool: {name}")]
+        
+        except Exception as e:
+            logger.error(f"Error handling tool call: {e}")
+            return [TextContent(type="text", text=f"Error: {str(e)}")]
     
-    async def send_error(self, error: str):
-        """Send an error message."""
-        message = MCP_Message(
-            type=MCP_MessageType.TOOL_ERROR,
-            content=error
-        )
-        await self.send_message(message)
+    async def process_message(self, data: dict):
+        """Process an incoming message."""
+        try:
+            if "name" in data and "arguments" in data:
+                # This is a tool call
+                name = data["name"]
+                arguments = data["arguments"]
+                return await self.call_tool(name, arguments)
+            else:
+                # Invalid message format
+                return [TextContent(type="text", text="Error: Invalid message format. Expected tool call.")]
+        except Exception as e:
+            logger.error(f"Error processing message: {e}")
+            return [TextContent(type="text", text=f"Error: {str(e)}")]
     
-    async def send_message(self, message: MCP_Message):
-        """Send a message to the client."""
-        # Write the JSON to stdout
-        output = json.dumps(message.model_dump())
-        print(output, flush=True)
+    async def run(self, input_stream: TextIO, output_stream: TextIO):
+        """Run the server with the given input and output streams."""
+        while True:
+            try:
+                # Read a line from input
+                line = await asyncio.to_thread(input_stream.readline)
+                
+                if not line:
+                    break
+                
+                try:
+                    # Parse the JSON data
+                    data = json.loads(line)
+                    
+                    # Process the message
+                    results = await self.process_message(data)
+                    
+                    # Write the results to output
+                    for result in results:
+                        output_stream.write(json.dumps(result.model_dump()) + "\n")
+                        output_stream.flush()
+                
+                except json.JSONDecodeError as e:
+                    logger.error(f"Failed to decode JSON: {e}")
+                    output_stream.write(json.dumps(TextContent(type="text", text=f"Error: Invalid JSON: {e}").model_dump()) + "\n")
+                    output_stream.flush()
+                
+                except Exception as e:
+                    logger.error(f"Error processing request: {e}")
+                    output_stream.write(json.dumps(TextContent(type="text", text=f"Error: {str(e)}").model_dump()) + "\n")
+                    output_stream.flush()
+            
+            except Exception as e:
+                logger.error(f"Unexpected error: {e}")
+                try:
+                    output_stream.write(json.dumps(TextContent(type="text", text=f"Error: {str(e)}").model_dump()) + "\n")
+                    output_stream.flush()
+                except:
+                    pass
 
 
 async def main():
     """Run the MCP server."""
     server = MCPServer()
     try:
-        await server.handle_input()
+        await server.run(sys.stdin, sys.stdout)
     except Exception as e:
         logger.error(f"Fatal error: {e}")
         sys.exit(1)

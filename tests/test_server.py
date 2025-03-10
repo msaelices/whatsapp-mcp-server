@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from whatsapp_mcp.models import MCP_Message, MCP_MessageType, TextContent
+from whatsapp_mcp.models import MCP_Message, MCP_MessageType, TextContent, ToolCall
 from whatsapp_mcp.server import MCPServer
 
 
@@ -90,7 +90,7 @@ def test_process_message(mock_auth_manager, server):
         # Test with tool call
         tool_call_message = MCP_Message(
             type=MCP_MessageType.TOOL_CALL,
-            content={"name": "list_tools", "arguments": {}}
+            content=ToolCall(name="list_tools", arguments={})
         )
         await server.process_message(tool_call_message)
         server.handle_tool_call.assert_called_once_with("list_tools", {})

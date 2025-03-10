@@ -42,7 +42,7 @@ class MCPServer:
                 # Parse the JSON input
                 try:
                     data = json.loads(line)
-                    message = MCP_Message.parse_obj(data)
+                    message = MCP_Message.model_validate(data)
                     await self.process_message(message)
                 except ValidationError as e:
                     logger.error(f"Failed to parse message: {e}")
@@ -72,7 +72,7 @@ class MCPServer:
             # Handle tool call
             if isinstance(message.content, ToolCall) or isinstance(message.content, dict):
                 if isinstance(message.content, dict):
-                    content = ToolCall.parse_obj(message.content)
+                    content = ToolCall.model_validate(message.content)
                 else:
                     content = message.content
                     
@@ -111,7 +111,7 @@ class MCPServer:
                 
                 qr_code = await self.auth_manager.get_qr_code(session_id)
                 if qr_code:
-                    await self.send_tool_result(qr_code.dict())
+                    await self.send_tool_result(qr_code.model_dump())
                 else:
                     await self.send_error("Failed to generate QR code")
             
@@ -159,7 +159,7 @@ class MCPServer:
                     return
                 
                 try:
-                    send_message_args = SendMessage.parse_obj(arguments)
+                    send_message_args = SendMessage.model_validate(arguments)
                     result = await message.send_message(
                         session_id=session_id,
                         chat_id=send_message_args.chat_id,
@@ -202,13 +202,13 @@ class MCPServer:
                     return
                 
                 try:
-                    create_group_args = CreateGroup.parse_obj(arguments)
+                    create_group_args = CreateGroup.model_validate(arguments)
                     result = await group.create_group(
                         session_id=session_id,
                         group_name=create_group_args.group_name,
                         participants=create_group_args.participants
                     )
-                    await self.send_tool_result(result.dict())
+                    await self.send_tool_result(result.model_dump())
                 except ValidationError as e:
                     await self.send_error(f"Invalid arguments: {e}")
                 except Exception as e:
@@ -223,12 +223,12 @@ class MCPServer:
                     return
                 
                 try:
-                    group_participants_args = GroupParticipants.parse_obj(arguments)
+                    group_participants_args = GroupParticipants.model_validate(arguments)
                     participants = await group.get_group_participants(
                         session_id=session_id,
                         group_id=group_participants_args.group_id
                     )
-                    await self.send_tool_result({"participants": [p.dict() for p in participants]})
+                    await self.send_tool_result({"participants": [p.model_dump() for p in participants]})
                 except ValidationError as e:
                     await self.send_error(f"Invalid arguments: {e}")
                 except Exception as e:
@@ -295,7 +295,7 @@ class MCPServer:
             Tool(
                 name="send_message",
                 description="Send a message to a chat",
-                input_schema=SendMessage.schema()
+                input_schema=SendMessage.model_json_schema()
             ),
             Tool(
                 name="get_chats",
@@ -312,16 +312,16 @@ class MCPServer:
             Tool(
                 name="create_group",
                 description="Create a new WhatsApp group",
-                input_schema=CreateGroup.schema()
+                input_schema=CreateGroup.model_json_schema()
             ),
             Tool(
                 name="get_group_participants",
                 description="Get the participants of a WhatsApp group",
-                input_schema=GroupParticipants.schema()
+                input_schema=GroupParticipants.model_json_schema()
             )
         ]
         
-        return [tool.dict() for tool in tools]
+        return [tool.model_dump() for tool in tools]
     
     async def send_text(self, text: str):
         """Send a text message."""
@@ -350,7 +350,7 @@ class MCPServer:
     async def send_message(self, message: MCP_Message):
         """Send a message to the client."""
         # Write the JSON to stdout
-        output = json.dumps(message.dict())
+        output = json.dumps(message.model_dump())
         print(output, flush=True)
 
 

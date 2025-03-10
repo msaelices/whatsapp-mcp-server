@@ -18,6 +18,15 @@ WhatsApp MCP Server is a Python implementation that enables language models like
 - **Group Management**: Create groups, list members, add/remove participants
 - **Session Management**: Create, restore, and manage multiple WhatsApp sessions
 
+## WhatsApp API Client
+
+This project uses the `whatsapp-api-client-python` library to interact with WhatsApp. The client provides access to the WhatsApp Cloud API, which requires:
+
+1. A WhatsApp Business Account
+2. A valid API key or access token
+
+You should set up your WhatsApp Business API credentials before using this MCP server. Please refer to the [WhatsApp Business API documentation](https://developers.facebook.com/docs/whatsapp/cloud-api) for more information on how to obtain the necessary credentials.
+
 ## Installation
 
 ```bash
@@ -34,7 +43,17 @@ pip install -e .
 Run the MCP server:
 
 ```bash
-python src/main.py
+# Install the package with development mode
+pip install -e .
+
+# Run the MCP server
+whatsapp-mcp
+```
+
+For debugging:
+
+```bash
+whatsapp-mcp --debug
 ```
 
 The server communicates through standard input/output streams using the Model Context Protocol (MCP).

@@ -1,13 +1,14 @@
 """Tests for the server module."""
 
 import asyncio
+import io
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from whatsapp_mcp.models import MCP_Message, MCP_MessageType, TextContent, ToolCall
-from whatsapp_mcp.server import MCPServer
+from whatsapp_mcp.models import TextContent
+from whatsapp_mcp.server import MCPServer, Tool
 
 
 @pytest.fixture
@@ -16,17 +17,50 @@ def server():
     return MCPServer()
 
 
+def test_register_tools(server):
+    """Test tool registration."""
+    # Check that tools were registered
+    assert len(server._tools) > 0
+    
+    # Check that required tools are present
+    assert "list_tools" in server._tools
+    assert "create_session" in server._tools
+    assert "send_message" in server._tools
+    assert "get_group_participants" in server._tools
+
+
 @patch("whatsapp_mcp.modules.auth.auth_manager")
 def test_list_tools(mock_auth_manager, server):
     """Test listing tools."""
     # Create async function to run the test
     async def run_test():
-        server.send_tool_result = AsyncMock()
-        await server.handle_tool_call("list_tools", {})
-        server.send_tool_result.assert_called_once()
+        tools = await server.list_tools()
         
         # Check that the tools list contains expected tools
-        tools = server.send_tool_result.call_args[0][0]
+        tool_names = [tool.name for tool in tools]
+        
+        assert "list_tools" in tool_names
+        assert "create_session" in tool_names
+        assert "send_message" in tool_names
+        assert "get_group_participants" in tool_names
+    
+    # Run the async test
+    asyncio.run(run_test())
+
+
+@patch("whatsapp_mcp.modules.auth.auth_manager")
+def test_call_tool_list_tools(mock_auth_manager, server):
+    """Test calling the list_tools tool."""
+    # Create async function to run the test
+    async def run_test():
+        result = await server.call_tool("list_tools", {})
+        
+        # Check the result
+        assert len(result) == 1
+        assert result[0].type == "text"
+        
+        # Parse the JSON string in the text field
+        tools = json.loads(result[0].text)
         tool_names = [tool["name"] for tool in tools]
         
         assert "list_tools" in tool_names
@@ -39,85 +73,106 @@ def test_list_tools(mock_auth_manager, server):
 
 
 @patch("whatsapp_mcp.modules.auth.auth_manager")
-def test_create_session(mock_auth_manager, server):
-    """Test creating a session."""
+def test_call_tool_create_session(mock_auth_manager, server):
+    """Test calling the create_session tool."""
     # Setup mock
     mock_auth_manager.create_session = AsyncMock(return_value=(True, "Session created successfully"))
     
     # Create async function to run the test
     async def run_test():
-        server.send_tool_result = AsyncMock()
-        server.send_error = AsyncMock()
-        
         # Test with valid arguments
-        await server.handle_tool_call("create_session", {"session_id": "test_session"})
-        server.send_tool_result.assert_called_once()
+        result = await server.call_tool("create_session", {"session_id": "test_session"})
+        
+        # Check the result
+        assert len(result) == 1
+        assert result[0].type == "text"
+        assert "Success" in result[0].text
         assert server.current_session_id == "test_session"
         
-        # Reset mocks
-        server.send_tool_result.reset_mock()
-        server.send_error.reset_mock()
-        
         # Test with missing session_id
-        await server.handle_tool_call("create_session", {})
-        server.send_error.assert_called_once()
+        result = await server.call_tool("create_session", {})
+        
+        # Check the result
+        assert len(result) == 1
+        assert result[0].type == "text"
+        assert "Error" in result[0].text
     
     # Run the async test
     asyncio.run(run_test())
 
 
 @patch("whatsapp_mcp.modules.auth.auth_manager")
-def test_process_message(mock_auth_manager, server):
+def test_process_message(mock_auth_manager):
     """Test processing messages."""
+    # Create a fresh server for this test
+    server = MCPServer()
+    
+    # Setup mock
+    mock_auth_manager.create_session = AsyncMock(return_value=(True, "Session created successfully"))
+    
     # Create async function to run the test
     async def run_test():
-        server.send_text = AsyncMock()
-        server.send_error = AsyncMock()
-        server.handle_tool_call = AsyncMock()
+        # Test with valid tool call
+        result = await server.process_message({
+            "name": "create_session",
+            "arguments": {"session_id": "test_session"}
+        })
         
-        # Test with text message
-        text_message = MCP_Message(
-            type=MCP_MessageType.TEXT,
-            content=TextContent(text="Hello, world!")
-        )
-        await server.process_message(text_message)
-        server.send_text.assert_called_once()
+        # Check the result
+        assert len(result) == 1
+        assert result[0].type == "text"
+        assert "Success" in result[0].text
+        assert server.current_session_id == "test_session"
         
-        # Reset mocks
-        server.send_text.reset_mock()
-        server.send_error.reset_mock()
+        # Test with invalid message format
+        result = await server.process_message({"invalid": "format"})
         
-        # Test with tool call
-        tool_call_message = MCP_Message(
-            type=MCP_MessageType.TOOL_CALL,
-            content=ToolCall(name="list_tools", arguments={})
-        )
-        await server.process_message(tool_call_message)
-        server.handle_tool_call.assert_called_once_with("list_tools", {})
+        # Check the result
+        assert len(result) == 1
+        assert result[0].type == "text"
+        assert "Error" in result[0].text
     
     # Run the async test
     asyncio.run(run_test())
 
 
 @patch("whatsapp_mcp.modules.auth.auth_manager")
-def test_send_message(mock_auth_manager, server):
-    """Test sending a message."""
+def test_run(mock_auth_manager):
+    """Test the run method."""
+    # Create a fresh server for this test
+    server = MCPServer()
+    
+    # Setup mock
+    mock_auth_manager.create_session = AsyncMock(return_value=(True, "Session created successfully"))
+    
+    # Create mock input and output streams
+    input_stream = io.StringIO('{"name": "create_session", "arguments": {"session_id": "test_session"}}\n')
+    output_stream = io.StringIO()
+    
     # Create async function to run the test
     async def run_test():
-        # Mock print function to capture output
-        with patch("builtins.print") as mock_print:
-            # Send a text message
-            await server.send_text("Hello, world!")
-            
-            # Check that print was called with a JSON string
-            mock_print.assert_called_once()
-            output = mock_print.call_args[0][0]
-            
-            # Parse the JSON output and check the message
-            message = json.loads(output)
-            assert message["type"] == "text"
-            assert message["content"]["type"] == "text"
-            assert message["content"]["text"] == "Hello, world!"
+        # Run with a single input
+        task = asyncio.create_task(server.run(input_stream, output_stream))
+        
+        # Wait a short time to allow processing
+        await asyncio.sleep(0.1)
+        
+        # Cancel the task (otherwise it would wait forever for more input)
+        task.cancel()
+        
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+        
+        # Check the output
+        output = output_stream.getvalue()
+        assert output
+        
+        # Parse the JSON output
+        result = json.loads(output.strip())
+        assert result["type"] == "text"
+        assert "Success" in result["text"]
     
     # Run the async test
     asyncio.run(run_test())

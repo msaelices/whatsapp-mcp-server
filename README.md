@@ -55,19 +55,31 @@ The server communicates through standard input/output streams using the Model Co
 To add a WhatsApp server to Claude, use the `claude mcp add` command:
 
 ```
-# Basic syntax
-$ claude mcp add <name> <command> [args...]
-
-# Example: Adding the WhatsApp MCP server
+# Add the WhatsApp MCP server
 $ claude mcp add whatsapp -- python /path/to/src/main.py
+
+# List existing MCP servers - Validate that the server is running
+claude mcp list
+
+# Start claude code
+claude
 ```
 
-Then you can interact with it in Claude with commands like:
+## Using with Claude
+
+Once the WhatsApp MCP server is running, you can interact with it using Claude in your conversations:
+
+### Authenticating with WhatsApp
 
 ```
-/tool whatsapp create_session --session_id my_session
-/tool whatsapp get_qr_code
-/tool whatsapp send_message --chat_id "1234567890@c.us" --content '{"type":"text","text":"Hello"}'
+Login to WhatsApp
+```
+
+
+### Sending a message
+
+```
+Send the "Hello" message to John Doe
 ```
 
 ## Development

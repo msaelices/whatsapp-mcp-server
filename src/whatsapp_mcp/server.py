@@ -5,12 +5,15 @@ import json
 import logging
 import sys
 from enum import Enum
-from typing import Any, Dict, List, Optional, TextIO, Union
+from typing import Any, Dict, List, Optional, Union
 
-from pydantic import BaseModel, ValidationError
+from mcp.server import Server
+from mcp.server.stdio import stdio_server
+from mcp.types import Tool, TextContent
+from pydantic import BaseModel, Field, ValidationError
 
 from whatsapp_mcp.models import (
-    CreateGroup, GroupParticipants, SendMessage, TextContent, ToolCall
+    CreateGroup, GroupParticipants, SendMessage
 )
 from whatsapp_mcp.modules import auth, group, message
 
@@ -20,13 +23,6 @@ logging.basicConfig(
     handlers=[logging.StreamHandler()]
 )
 logger = logging.getLogger(__name__)
-
-
-class Tool(BaseModel):
-    """Schema for tool definition."""
-    name: str
-    description: str
-    inputSchema: Dict[str, Any]
 
 
 class WhatsAppTools(str, Enum):
@@ -42,136 +38,126 @@ class WhatsAppTools(str, Enum):
     GET_GROUP_PARTICIPANTS = "get_group_participants"
 
 
-class MCPServer:
-    """Model Context Protocol (MCP) Server for WhatsApp."""
+class CreateSessionModel(BaseModel):
+    """Input schema for create_session tool."""
+    session_id: str = Field(..., description="ID for the session")
+
+
+class GetQRCodeModel(BaseModel):
+    """Input schema for get_qr_code tool."""
+    session_id: Optional[str] = Field(None, description="ID of the session")
+
+
+class AuthenticateModel(BaseModel):
+    """Input schema for authenticate tool."""
+    session_id: Optional[str] = Field(None, description="ID of the session")
+    qr_code: str = Field(..., description="QR code text")
+
+
+class LogoutModel(BaseModel):
+    """Input schema for logout tool."""
+    session_id: Optional[str] = Field(None, description="ID of the session")
+
+
+class GetChatsModel(BaseModel):
+    """Input schema for get_chats tool."""
+    session_id: Optional[str] = Field(None, description="ID of the session")
+    limit: int = Field(50, description="Maximum number of chats to return")
+    offset: int = Field(0, description="Offset for pagination")
+
+
+# Global state for the current session
+current_session_id: Optional[str] = None
+
+
+async def serve():
+    """Run the WhatsApp MCP server."""
+    global current_session_id
     
-    def __init__(self, name: str = "whatsapp-mcp"):
-        self.name = name
-        self.auth_manager = auth.auth_manager
-        self.current_session_id: Optional[str] = None
-        self._tools: Dict[str, Tool] = {}
-        self._register_tools()
+    logger.info("Starting WhatsApp MCP Server")
+    server = Server("whatsapp-mcp")
     
-    def _register_tools(self):
-        """Register available tools."""
-        tools = [
-            Tool(
-                name=WhatsAppTools.LIST_TOOLS,
-                description="List available tools",
-                inputSchema={}
-            ),
+    @server.list_tools()
+    async def list_tools() -> list[Tool]:
+        """List available tools."""
+        return [
             Tool(
                 name=WhatsAppTools.CREATE_SESSION,
                 description="Create a new WhatsApp session",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "session_id": {"type": "string", "description": "ID for the session"}
-                    },
-                    "required": ["session_id"]
-                }
+                inputSchema=CreateSessionModel.model_json_schema(),
             ),
             Tool(
                 name=WhatsAppTools.GET_QR_CODE,
                 description="Get a QR code for authentication",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "session_id": {"type": "string", "description": "ID of the session"}
-                    }
-                }
+                inputSchema=GetQRCodeModel.model_json_schema(),
             ),
             Tool(
                 name=WhatsAppTools.AUTHENTICATE,
                 description="Authenticate using QR code",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "session_id": {"type": "string", "description": "ID of the session"},
-                        "qr_code": {"type": "string", "description": "QR code text"}
-                    },
-                    "required": ["qr_code"]
-                }
+                inputSchema=AuthenticateModel.model_json_schema(),
             ),
             Tool(
                 name=WhatsAppTools.LOGOUT,
                 description="Logout from a session",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "session_id": {"type": "string", "description": "ID of the session"}
-                    }
-                }
+                inputSchema=LogoutModel.model_json_schema(),
             ),
             Tool(
                 name=WhatsAppTools.SEND_MESSAGE,
                 description="Send a message to a chat",
-                inputSchema=SendMessage.model_json_schema()
+                inputSchema=SendMessage.model_json_schema(),
             ),
             Tool(
                 name=WhatsAppTools.GET_CHATS,
                 description="Get a list of chats",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "session_id": {"type": "string", "description": "ID of the session"},
-                        "limit": {"type": "integer", "description": "Maximum number of chats to return"},
-                        "offset": {"type": "integer", "description": "Offset for pagination"}
-                    }
-                }
+                inputSchema=GetChatsModel.model_json_schema(),
             ),
             Tool(
                 name=WhatsAppTools.CREATE_GROUP,
                 description="Create a new WhatsApp group",
-                inputSchema=CreateGroup.model_json_schema()
+                inputSchema=CreateGroup.model_json_schema(),
             ),
             Tool(
                 name=WhatsAppTools.GET_GROUP_PARTICIPANTS,
                 description="Get the participants of a WhatsApp group",
-                inputSchema=GroupParticipants.model_json_schema()
-            )
+                inputSchema=GroupParticipants.model_json_schema(),
+            ),
         ]
-        
-        for tool in tools:
-            self._tools[tool.name] = tool
     
-    async def list_tools(self) -> List[Tool]:
-        """List available tools."""
-        return list(self._tools.values())
-    
-    async def call_tool(self, name: str, arguments: Dict[str, Any]) -> List[TextContent]:
+    @server.call_tool()
+    async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         """Call a tool with the given arguments."""
+        global current_session_id
+        
         try:
             match name:
-                case WhatsAppTools.LIST_TOOLS:
-                    tools = await self.list_tools()
-                    return [TextContent(type="text", text=json.dumps([tool.model_dump() for tool in tools]))]
-                
                 case WhatsAppTools.CREATE_SESSION:
+                    # Create a new session
                     session_id = arguments.get("session_id")
                     if not session_id:
                         return [TextContent(type="text", text="Error: session_id is required")]
                     
-                    success, message_text = await self.auth_manager.create_session(session_id)
+                    success, message_text = await auth.auth_manager.create_session(session_id)
                     if success:
-                        self.current_session_id = session_id
+                        current_session_id = session_id
                         return [TextContent(type="text", text=f"Success: {message_text}")]
                     else:
                         return [TextContent(type="text", text=f"Error: {message_text}")]
                 
                 case WhatsAppTools.GET_QR_CODE:
-                    session_id = arguments.get("session_id") or self.current_session_id
+                    # Get a QR code for authentication
+                    session_id = arguments.get("session_id") or current_session_id
                     if not session_id:
                         return [TextContent(type="text", text="Error: No active session")]
                     
-                    qr_code = await self.auth_manager.get_qr_code(session_id)
+                    qr_code = await auth.auth_manager.get_qr_code(session_id)
                     if qr_code:
                         return [TextContent(type="text", text=json.dumps(qr_code.model_dump()))]
                     else:
                         return [TextContent(type="text", text="Error: Failed to generate QR code")]
                 
                 case WhatsAppTools.AUTHENTICATE:
-                    session_id = arguments.get("session_id") or self.current_session_id
+                    # Authenticate using QR code
+                    session_id = arguments.get("session_id") or current_session_id
                     qr_code = arguments.get("qr_code")
                     
                     if not session_id:
@@ -180,28 +166,30 @@ class MCPServer:
                     if not qr_code:
                         return [TextContent(type="text", text="Error: qr_code is required")]
                     
-                    success = await self.auth_manager.authenticate(session_id, qr_code)
+                    success = await auth.auth_manager.authenticate(session_id, qr_code)
                     if success:
                         return [TextContent(type="text", text="Success: Authentication successful")]
                     else:
                         return [TextContent(type="text", text="Error: Authentication failed")]
                 
                 case WhatsAppTools.LOGOUT:
-                    session_id = arguments.get("session_id") or self.current_session_id
+                    # Logout from a session
+                    session_id = arguments.get("session_id") or current_session_id
                     
                     if not session_id:
                         return [TextContent(type="text", text="Error: No active session")]
                     
-                    success = await self.auth_manager.logout(session_id)
+                    success = await auth.auth_manager.logout(session_id)
                     if success:
-                        if session_id == self.current_session_id:
-                            self.current_session_id = None
+                        if session_id == current_session_id:
+                            current_session_id = None
                         return [TextContent(type="text", text="Success: Logout successful")]
                     else:
                         return [TextContent(type="text", text="Error: Logout failed")]
                 
                 case WhatsAppTools.SEND_MESSAGE:
-                    session_id = arguments.get("session_id") or self.current_session_id
+                    # Send a message
+                    session_id = arguments.get("session_id") or current_session_id
                     
                     if not session_id:
                         return [TextContent(type="text", text="Error: No active session")]
@@ -221,7 +209,8 @@ class MCPServer:
                         return [TextContent(type="text", text=f"Error: Failed to send message: {e}")]
                 
                 case WhatsAppTools.GET_CHATS:
-                    session_id = arguments.get("session_id") or self.current_session_id
+                    # Get chats
+                    session_id = arguments.get("session_id") or current_session_id
                     
                     if not session_id:
                         return [TextContent(type="text", text="Error: No active session")]
@@ -240,7 +229,8 @@ class MCPServer:
                         return [TextContent(type="text", text=f"Error: Failed to get chats: {e}")]
                 
                 case WhatsAppTools.CREATE_GROUP:
-                    session_id = arguments.get("session_id") or self.current_session_id
+                    # Create a group
+                    session_id = arguments.get("session_id") or current_session_id
                     
                     if not session_id:
                         return [TextContent(type="text", text="Error: No active session")]
@@ -259,7 +249,8 @@ class MCPServer:
                         return [TextContent(type="text", text=f"Error: Failed to create group: {e}")]
                 
                 case WhatsAppTools.GET_GROUP_PARTICIPANTS:
-                    session_id = arguments.get("session_id") or self.current_session_id
+                    # Get group participants
+                    session_id = arguments.get("session_id") or current_session_id
                     
                     if not session_id:
                         return [TextContent(type="text", text="Error: No active session")]
@@ -283,71 +274,7 @@ class MCPServer:
             logger.error(f"Error handling tool call: {e}")
             return [TextContent(type="text", text=f"Error: {str(e)}")]
     
-    async def process_message(self, data: dict):
-        """Process an incoming message."""
-        try:
-            if "name" in data and "arguments" in data:
-                # This is a tool call
-                name = data["name"]
-                arguments = data["arguments"]
-                return await self.call_tool(name, arguments)
-            else:
-                # Invalid message format
-                return [TextContent(type="text", text="Error: Invalid message format. Expected tool call.")]
-        except Exception as e:
-            logger.error(f"Error processing message: {e}")
-            return [TextContent(type="text", text=f"Error: {str(e)}")]
-    
-    async def run(self, input_stream: TextIO, output_stream: TextIO):
-        """Run the server with the given input and output streams."""
-        while True:
-            try:
-                # Read a line from input
-                line = await asyncio.to_thread(input_stream.readline)
-                
-                if not line:
-                    break
-                
-                try:
-                    # Parse the JSON data
-                    data = json.loads(line)
-                    
-                    # Process the message
-                    results = await self.process_message(data)
-                    
-                    # Write the results to output
-                    for result in results:
-                        output_stream.write(json.dumps(result.model_dump()) + "\n")
-                        output_stream.flush()
-                
-                except json.JSONDecodeError as e:
-                    logger.error(f"Failed to decode JSON: {e}")
-                    output_stream.write(json.dumps(TextContent(type="text", text=f"Error: Invalid JSON: {e}").model_dump()) + "\n")
-                    output_stream.flush()
-                
-                except Exception as e:
-                    logger.error(f"Error processing request: {e}")
-                    output_stream.write(json.dumps(TextContent(type="text", text=f"Error: {str(e)}").model_dump()) + "\n")
-                    output_stream.flush()
-            
-            except Exception as e:
-                logger.error(f"Unexpected error: {e}")
-                try:
-                    output_stream.write(json.dumps(TextContent(type="text", text=f"Error: {str(e)}").model_dump()) + "\n")
-                    output_stream.flush()
-                except:
-                    pass
-
-
-async def main():
-    """Run the MCP server."""
-    server = MCPServer()
-    try:
-        await server.run(sys.stdin, sys.stdout)
-    except Exception as e:
-        logger.error(f"Fatal error: {e}")
-        sys.exit(1)
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
+    # Run the server
+    options = server.create_initialization_options()
+    async with stdio_server() as (read_stream, write_stream):
+        await server.run(read_stream, write_stream, options, raise_exceptions=True)

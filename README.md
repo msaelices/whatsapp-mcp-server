@@ -20,12 +20,7 @@ WhatsApp MCP Server is a Python implementation that enables language models like
 
 ## WhatsApp API Client
 
-This project uses the `whatsapp-api-client-python` library to interact with WhatsApp. The client provides access to the WhatsApp Cloud API, which requires:
-
-1. A WhatsApp Business Account
-2. A valid API key or access token
-
-You should set up your WhatsApp Business API credentials before using this MCP server. Please refer to the [WhatsApp Business API documentation](https://developers.facebook.com/docs/whatsapp/cloud-api) for more information on how to obtain the necessary credentials.
+This project uses the `whatsapp-api-client-python` library to interact with WhatsApp. The client provides access to the WhatsApp Cloud API, which requires a [GreenAPI](https://green-api.com/) account to use.
 
 ### Environment Variables
 

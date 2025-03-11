@@ -27,6 +27,15 @@ This project uses the `whatsapp-api-client-python` library to interact with What
 
 You should set up your WhatsApp Business API credentials before using this MCP server. Please refer to the [WhatsApp Business API documentation](https://developers.facebook.com/docs/whatsapp/cloud-api) for more information on how to obtain the necessary credentials.
 
+### Environment Variables
+
+This project uses environment variables for configuration:
+
+- `GREENAPI_ID_INSTANCE`: Your GreenAPI ID instance
+- `GREENAPI_API_TOKEN`: Your GreenAPI API token
+
+You can either set these in your environment or use the provided `.env` file (see Installation instructions).
+
 ## Installation
 
 ```bash
@@ -36,6 +45,10 @@ cd whatsapp-mcp-server
 
 # Install dependencies
 pip install -e .
+
+# Set up environment variables
+cp .env-template .env
+# Edit the .env file with your GreenAPI credentials
 ```
 
 ## Usage

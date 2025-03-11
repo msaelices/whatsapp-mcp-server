@@ -80,7 +80,7 @@ To add a WhatsApp server to Claude, use the `claude mcp add` command:
 
 ```
 # Add the WhatsApp MCP server
-$ claude mcp add whatsapp -- python /path/to/src/main.py
+$ claude mcp add whatsapp -- whatsapp-mcp
 
 # List existing MCP servers - Validate that the server is running
 claude mcp list

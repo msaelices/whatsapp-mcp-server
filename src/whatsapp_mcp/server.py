@@ -26,9 +26,6 @@ class WhatsAppTools(str, Enum):
 
     LIST_TOOLS = "list_tools"
     CREATE_SESSION = "create_session"
-    GET_QR_CODE = "get_qr_code"
-    AUTHENTICATE = "authenticate"
-    LOGOUT = "logout"
     SEND_MESSAGE = "send_message"
     GET_CHATS = "get_chats"
     CREATE_GROUP = "create_group"
@@ -95,50 +92,6 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
                     return [TextContent(type="text", text=f"Success: {message_text}")]
                 else:
                     return [TextContent(type="text", text=f"Error: {message_text}")]
-
-            # case WhatsAppTools.GET_QR_CODE:
-            #     # Get a QR code for authentication
-            #     session_id = arguments.get("session_id") or current_session_id
-            #     if not session_id:
-            #         return [TextContent(type="text", text="Error: No active session")]
-            #
-            #     qr_code = await auth.auth_manager.get_qr_code(session_id)
-            #     if qr_code:
-            #         return [TextContent(type="text", text=json.dumps(qr_code.model_dump()))]
-            #     else:
-            #         return [TextContent(type="text", text="Error: Failed to generate QR code")]
-            #
-            # case WhatsAppTools.AUTHENTICATE:
-            #     # Authenticate using QR code
-            #     session_id = arguments.get("session_id") or current_session_id
-            #     qr_code = arguments.get("qr_code")
-            #
-            #     if not session_id:
-            #         return [TextContent(type="text", text="Error: No active session")]
-            #
-            #     if not qr_code:
-            #         return [TextContent(type="text", text="Error: qr_code is required")]
-            #
-            #     success = await auth.auth_manager.authenticate(session_id, qr_code)
-            #     if success:
-            #         return [TextContent(type="text", text="Success: Authentication successful")]
-            #     else:
-            #         return [TextContent(type="text", text="Error: Authentication failed")]
-            #
-            # case WhatsAppTools.LOGOUT:
-            #     # Logout from a session
-            #     session_id = arguments.get("session_id") or current_session_id
-            #
-            #     if not session_id:
-            #         return [TextContent(type="text", text="Error: No active session")]
-            #
-            #     success = await auth.auth_manager.logout(session_id)
-            #     if success:
-            #         if session_id == current_session_id:
-            #             current_session_id = None
-            #         return [TextContent(type="text", text="Success: Logout successful")]
-            #     else:
-            #         return [TextContent(type="text", text="Error: Logout failed")]
 
             case WhatsAppTools.SEND_MESSAGE:
                 # Send a message

@@ -20,8 +20,7 @@ logger = logging.getLogger(__name__)
 async def send_message(
     session_id: str,
     chat_id: str,
-    content: Union[TextContent, MediaContent, LocationContent, ContactContent, 
-                  ButtonsContent, ListContent, PollContent],
+    content: str,
     reply_to: Optional[str] = None
 ) -> dict:
     """Send a message to a chat."""
@@ -38,167 +37,48 @@ async def send_message(
         raise ValueError("WhatsApp client not initialized")
     
     try:
-        # Prepare the message data based on content type
-        message_data = {}
-        content_type = getattr(content, "type", "text")
-        
-        if content_type == "text" and isinstance(content, TextContent):
-            message_data = {
-                "to": chat_id,
-                "text": {"body": content.text}
-            }
-        elif content_type in ("image", "document", "audio", "video", "sticker") and isinstance(content, MediaContent):
-            message_data = {
-                "to": chat_id,
-                "type": content_type,
-                content_type: {}
-            }
-            
-            # Handle media content
-            if content.url:
-                message_data[content_type]["link"] = content.url
-            elif content.data:
-                message_data[content_type]["base64"] = content.data
-            
-            # Add caption for media if provided
-            if content.caption:
-                message_data[content_type]["caption"] = content.caption
-            
-            # Add filename for documents if provided
-            if content_type == "document" and content.filename:
-                message_data[content_type]["filename"] = content.filename
-        elif content_type == "location" and isinstance(content, LocationContent):
-            message_data = {
-                "to": chat_id,
-                "type": "location",
-                "location": {
-                    "latitude": content.latitude,
-                    "longitude": content.longitude
-                }
-            }
-            
-            if content.name:
-                message_data["location"]["name"] = content.name
-            if content.address:
-                message_data["location"]["address"] = content.address
-        elif content_type == "contact" and isinstance(content, ContactContent):
-            message_data = {
-                "to": chat_id,
-                "type": "contacts",
-                "contacts": [{
-                    "name": {
-                        "formatted_name": content.name
-                    },
-                    "phones": [{
-                        "phone": content.phone,
-                        "type": "MOBILE"
-                    }]
-                }]
-            }
-            
-            if content.email:
-                message_data["contacts"][0]["emails"] = [{
-                    "email": content.email,
-                    "type": "WORK"
-                }]
-        elif content_type == "buttons" and isinstance(content, ButtonsContent):
-            # Interactive message with buttons
-            message_data = {
-                "to": chat_id,
-                "type": "interactive",
-                "interactive": {
-                    "type": "button",
-                    "body": {
-                        "text": content.text
-                    },
-                    "action": {
-                        "buttons": [
-                            {
-                                "type": "reply",
-                                "reply": {
-                                    "id": button.id,
-                                    "title": button.title
-                                }
-                            } for button in content.buttons
-                        ]
-                    }
-                }
-            }
-        elif content_type == "list" and isinstance(content, ListContent):
-            # Interactive message with list
-            message_data = {
-                "to": chat_id,
-                "type": "interactive",
-                "interactive": {
-                    "type": "list",
-                    "body": {
-                        "text": content.text
-                    },
-                    "action": {
-                        "button": content.button_text,
-                        "sections": [
-                            {
-                                "title": section.title,
-                                "rows": [
-                                    {
-                                        "id": item.id,
-                                        "title": item.title,
-                                        "description": item.description or ""
-                                    } for item in section.items
-                                ]
-                            } for section in content.sections
-                        ]
-                    }
-                }
-            }
-        elif content_type == "poll" and isinstance(content, PollContent):
-            # Poll message (may not be directly supported by the API)
-            # Implement based on API capabilities
-            message_data = {
-                "to": chat_id,
-                "type": "interactive",
-                "interactive": {
-                    "type": "button",  # Use button as an alternative
-                    "body": {
-                        "text": f"Poll: {content.text}\n\n" + "\n".join(
-                            f"{i+1}. {option.title}" for i, option in enumerate(content.options)
-                        )
-                    },
-                    "action": {
-                        "buttons": [
-                            {
-                                "type": "reply",
-                                "reply": {
-                                    "id": option.id,
-                                    "title": option.title[:20]  # Button titles are limited
-                                }
-                            } for option in content.options[:3]  # WhatsApp has a limit on buttons
-                        ]
-                    }
-                }
-            }
+        # Use the content string directly as the message
+        # Prepare the message data for sending
+        message_data = {
+            "chatId": chat_id,
+            "message": content
+        }
         
         # Handle reply_to if provided
         if reply_to:
-            message_data["context"] = {"message_id": reply_to}
+            message_data["quotedMessageId"] = reply_to
         
         # Send the message via the WhatsApp API
         logger.debug(f"Sending message data: {json.dumps(message_data)}")
         
         # Convert to asyncio to prevent blocking
         response = await asyncio.to_thread(
-            whatsapp_client.client.send_message, 
+            whatsapp_client.client.sending.sendMessage,
             message_data
         )
         
-        # Extract message ID from response
-        message_id = response.get("messages", [{}])[0].get("id", f"msg_{uuid.uuid4().hex[:12]}")
+        # Process the response from the WhatsApp API
+        # Format may vary depending on the exact API implementation
+        if hasattr(response, 'data'):
+            response_data = response.data
+        else:
+            response_data = response
+            
+        # Generate a message ID if not provided in the response
+        message_id = str(uuid.uuid4())
+        
+        # Try to extract message ID from the response if available
+        if isinstance(response_data, dict):
+            if response_data.get("idMessage"):
+                message_id = response_data.get("idMessage")
+            elif response_data.get("id"):
+                message_id = response_data.get("id")
         
         result = {
             "message_id": message_id,
             "status": "sent",
             "timestamp": datetime.now().isoformat(),
-            "response": response
+            "response": response_data
         }
         
         logger.info(f"Message sent with ID {message_id}")

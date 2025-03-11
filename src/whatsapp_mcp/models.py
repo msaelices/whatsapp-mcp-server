@@ -121,15 +121,7 @@ class SendMessage(BaseModel):
     chat_id: str = Field(
         ..., description="The WhatsApp ID of the chat to send the message to"
     )
-    content: Union[
-        TextContent,
-        MediaContent,
-        LocationContent,
-        ContactContent,
-        ButtonsContent,
-        ListContent,
-        PollContent,
-    ] = Field(..., description="The content of the message to send")
+    content: str = Field(..., description="The content of the message to send")
     reply_to: str | None = Field(None, description="ID of the message to reply to")
 
 
@@ -213,4 +205,3 @@ class QRCode(BaseModel):
 
     data: str  # Base64 encoded image
     code: str  # The actual QR code text
-

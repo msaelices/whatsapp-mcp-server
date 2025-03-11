@@ -15,7 +15,8 @@ from dotenv import load_dotenv
 from whatsapp_mcp.models import QRCode
 
 # Import the WhatsApp API client
-from whatsapp_api_client_python import API
+from whatsapp_api_client_python.API import GreenApi
+from whatsapp_api_client_python.response import Response
 
 # Load environment variables
 load_dotenv()
@@ -40,12 +41,16 @@ class WhatsAppClient:
             # Initialize the WhatsApp API client with GreenAPI credentials from environment variables
             id_instance = os.getenv("GREENAPI_ID_INSTANCE")
             api_token_instance = os.getenv("GREENAPI_API_TOKEN")
-            
+
             if not id_instance or not api_token_instance:
-                logger.error("Missing required environment variables: GREENAPI_ID_INSTANCE or GREENAPI_API_TOKEN")
+                logger.error(
+                    "Missing required environment variables: GREENAPI_ID_INSTANCE or GREENAPI_API_TOKEN"
+                )
                 return False
-                
-            self.client = API(idInstance=id_instance, apiTokenInstance=api_token_instance)
+
+            self.client = GreenApi(
+                idInstance=id_instance, apiTokenInstance=api_token_instance
+            )
             return True
         except Exception as e:
             logger.error(f"Failed to initialize WhatsApp client: {e}")
@@ -59,31 +64,50 @@ class WhatsAppClient:
             logger.error("Client not initialized")
             return None
 
-        # Start a new session with the WhatsApp API
-        await asyncio.to_thread(self.client.start_session)
+        # Get QR code from the WhatsApp API
+        try:
+            # Start a new session with the WhatsApp API
+            # Initiate QR code generation
+            await asyncio.to_thread(lambda: self.client.account.qr())
 
-        # Wait for the QR code to be generated
-        qr_code_data = None
-        max_retries = 20
-        retry_count = 0
+            # Wait for the QR code to be generated
+            qr_code_data = None
+            max_retries = 20
+            retry_count = 0
 
-        while not qr_code_data and retry_count < max_retries:
-            status_data = await asyncio.to_thread(self.client.get_status_session)
+            while not qr_code_data and retry_count < max_retries:
+                status_response: Response = await asyncio.to_thread(
+                    lambda: self.client.account.getStatusInstance()
+                )
 
-            if status_data and "state" in status_data:
-                self.state = status_data["state"]
-
-                if self.state == "CONNECTED":
-                    self.is_authenticated = True
-                    logger.info("Client already authenticated")
-                    return None
-
-                if self.state == "STARTING" and "qrCode" in status_data:
-                    qr_code_data = status_data["qrCode"]
-                    break
-
-            retry_count += 1
-            await asyncio.sleep(1)
+                # Handle the response from getStatusInstance
+                if status_response.code == 200:
+                    if status_response.data and 'stateInstance' in status_response.data:
+                        state = status_response.data['stateInstance']
+                        
+                        if state == 'authorized':
+                            logger.info("Already authorized, no need for QR code")
+                            self.is_authenticated = True
+                            self.state = "authorized"
+                            return None
+                        
+                        if state == 'notAuthorized':
+                            # Check if the qrCode field is present in the response
+                            if 'qrCode' in status_response.data:
+                                qr_code_data = status_response.data['qrCode']
+                                logger.info("QR code obtained successfully")
+                                break
+                
+                if error := status_response.error:
+                    logger.warning(f"Error while getting QR code: {error}")
+                
+                # Continue trying if we haven't found a QR code yet
+                retry_count += 1
+                logger.debug(f"Waiting for QR code, attempt {retry_count}/{max_retries}")
+                await asyncio.sleep(1)
+        except Exception as e:
+            logger.error(f"Error generating QR code: {e}")
+            return None
 
         if not qr_code_data:
             logger.error("Failed to get QR code after maximum retries")
@@ -130,23 +154,39 @@ class WhatsAppClient:
             retry_count = 0
 
             while retry_count < max_retries:
-                status_data = await asyncio.to_thread(self.client.get_status_session)
+                status_response = await asyncio.to_thread(
+                    lambda: self.client.account.getStatusInstance()
+                )
 
-                if status_data and "state" in status_data:
-                    self.state = status_data["state"]
+                # Convert response to dictionary if it's not already
+                if hasattr(status_response, "json"):
+                    try:
+                        status_data = status_response.json()
+                    except Exception as e:
+                        logger.error(f"Failed to parse status response as JSON: {e}")
+                        status_data = {}
+                elif isinstance(status_response, dict):
+                    status_data = status_response
+                else:
+                    logger.error(f"Unexpected response type: {type(status_response)}")
+                    status_data = {}
 
-                    if self.state == "CONNECTED":
+                if status_data and "stateInstance" in status_data:
+                    state = status_data["stateInstance"]
+                    self.state = state
+
+                    if state == "authorized":
                         self.is_authenticated = True
                         # Store session data for restoration
                         self.session_data = {
-                            "session_id": status_data.get("session", ""),
+                            "session_id": status_data.get("idInstance", ""),
                             "authenticated_at": time.time(),
                             "state": self.state,
                         }
                         logger.info("Authentication successful")
                         return True
 
-                    if self.state == "FAILED":
+                    if state == "notAuthorized":
                         logger.error("Authentication failed")
                         return False
 
@@ -170,7 +210,7 @@ class WhatsAppClient:
 
         try:
             # Close the session
-            await asyncio.to_thread(self.client.logout_session)
+            await asyncio.to_thread(lambda: self.client.account.logout())
             self.is_authenticated = False
             self.state = "DISCONNECTED"
             self.session_data = {}
@@ -185,10 +225,27 @@ class WhatsAppClient:
             return {"state": "DISCONNECTED", "error": "Client not initialized"}
 
         try:
-            status_data = await asyncio.to_thread(self.client.get_status_session)
-            if status_data and "state" in status_data:
-                self.state = status_data["state"]
-                self.is_authenticated = self.state == "CONNECTED"
+            status_response = await asyncio.to_thread(
+                lambda: self.client.account.getStatusInstance()
+            )
+
+            # Convert response to dictionary if it's not already
+            if hasattr(status_response, "json"):
+                try:
+                    status_data = status_response.json()
+                except Exception as e:
+                    logger.error(f"Failed to parse status response as JSON: {e}")
+                    status_data = {}
+            elif isinstance(status_response, dict):
+                status_data = status_response
+            else:
+                logger.error(f"Unexpected response type: {type(status_response)}")
+                status_data = {}
+
+            if status_data and "stateInstance" in status_data:
+                state = status_data["stateInstance"]
+                self.state = state
+                self.is_authenticated = state == "authorized"
             return status_data or {"state": "UNKNOWN"}
         except Exception as e:
             logger.error(f"Failed to check status: {e}")
@@ -289,11 +346,11 @@ class AuthManager:
             # Restore the session state from saved data
             client.session_data = session_data
             client.state = session_data.get("state", "DISCONNECTED")
-            client.is_authenticated = client.state == "CONNECTED"
+            client.is_authenticated = client.state == "authorized"
 
             # Verify the session is still valid
             status = await client.check_status()
-            if status.get("state") != "CONNECTED":
+            if status.get("stateInstance") != "authorized":
                 logger.warning(
                     f"Session {session_id} no longer valid, need to reauthenticate"
                 )
@@ -328,4 +385,3 @@ class AuthManager:
 
 # Create a singleton instance
 auth_manager = AuthManager()
-

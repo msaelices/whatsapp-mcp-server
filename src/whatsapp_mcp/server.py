@@ -149,7 +149,7 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
                 try:
                     send_message_args = SendMessage.model_validate(arguments)
                     result = await message.send_message(
-                        chat_id=send_message_args.chat_id,
+                        phone_number=send_message_args.phone_number,
                         content=send_message_args.content,
                         reply_to=send_message_args.reply_to,
                     )
@@ -269,4 +269,3 @@ async def serve() -> None:
     options = server.create_initialization_options()
     async with stdio_server() as (read_stream, write_stream):
         await server.run(read_stream, write_stream, options, raise_exceptions=True)
-

@@ -118,9 +118,7 @@ class PollContent(BaseModel):
 class SendMessage(BaseModel):
     """Input schema for send_message tool."""
 
-    chat_id: str = Field(
-        ..., description="The WhatsApp ID of the chat to send the message to"
-    )
+    phone_number: str = Field(..., description="The phone number of the recipient")
     content: str = Field(..., description="The content of the message to send")
     reply_to: str | None = Field(None, description="ID of the message to reply to")
 

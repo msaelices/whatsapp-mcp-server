@@ -10,11 +10,18 @@ from whatsapp_mcp.modules.auth import auth_manager
 logger = logging.getLogger(__name__)
 
 
+def _get_chat_id(phone_number: str) -> str:
+    """Get the chat ID for a phone number."""
+    # Remove the country code symbol
+    phone_number = phone_number.strip().replace("+", "")
+    return f"{phone_number}@c.us"
+
+
 async def send_message(
-    chat_id: str, content: str, reply_to: Optional[str] = None
+    phone_number: str, content: str, reply_to: Optional[str] = None
 ) -> dict:
     """Send a message to a chat."""
-    logger.info(f"Sending message to {chat_id}")
+    logger.info(f"Sending message to {phone_number}")
 
     whatsapp_client = auth_manager.get_client()
     if not whatsapp_client:
@@ -24,6 +31,7 @@ async def send_message(
         raise ValueError("WhatsApp client not initialized")
 
     try:
+        chat_id = _get_chat_id(phone_number)
         # Send the message via the WhatsApp API
         logger.debug(f"Sending message to {chat_id}: {content}")
 

@@ -48,62 +48,57 @@ class WhatsAppClient:
             logger.error("Client not initialized")
             return None
 
-        try:
-            # Start a new session with the WhatsApp API
-            response = await asyncio.to_thread(self.client.start_session)
+        # Start a new session with the WhatsApp API
+        response = await asyncio.to_thread(self.client.start_session)
 
-            # Wait for the QR code to be generated
-            qr_code_data = None
-            max_retries = 20
-            retry_count = 0
+        # Wait for the QR code to be generated
+        qr_code_data = None
+        max_retries = 20
+        retry_count = 0
 
-            while not qr_code_data and retry_count < max_retries:
-                status_data = await asyncio.to_thread(self.client.get_status_session)
+        while not qr_code_data and retry_count < max_retries:
+            status_data = await asyncio.to_thread(self.client.get_status_session)
 
-                if status_data and "state" in status_data:
-                    self.state = status_data["state"]
+            if status_data and "state" in status_data:
+                self.state = status_data["state"]
 
-                    if self.state == "CONNECTED":
-                        self.is_authenticated = True
-                        logger.info("Client already authenticated")
-                        return None
+                if self.state == "CONNECTED":
+                    self.is_authenticated = True
+                    logger.info("Client already authenticated")
+                    return None
 
-                    if self.state == "STARTING" and "qrCode" in status_data:
-                        qr_code_data = status_data["qrCode"]
-                        break
+                if self.state == "STARTING" and "qrCode" in status_data:
+                    qr_code_data = status_data["qrCode"]
+                    break
 
-                retry_count += 1
-                await asyncio.sleep(1)
+            retry_count += 1
+            await asyncio.sleep(1)
 
-            if not qr_code_data:
-                logger.error("Failed to get QR code after maximum retries")
-                return None
-
-            # Store the QR code data
-            self.qr_code = qr_code_data
-
-            # Create a QR code image
-            qr = qrcode.QRCode(
-                version=1,
-                error_correction=qrcode.constants.ERROR_CORRECT_L,
-                box_size=10,
-                border=4,
-            )
-            qr.add_data(qr_code_data)
-            qr.make(fit=True)
-
-            img = qr.make_image(fill_color="black", back_color="white")
-
-            # Convert to base64
-            buffered = io.BytesIO()
-            img.save(buffered)
-            img_str = base64.b64encode(buffered.getvalue()).decode("ascii")
-
-            return QRCode(data=img_str, code=qr_code_data)
-
-        except Exception as e:
-            logger.error(f"Failed to generate QR code: {e}")
+        if not qr_code_data:
+            logger.error("Failed to get QR code after maximum retries")
             return None
+
+        # Store the QR code data
+        self.qr_code = qr_code_data
+
+        # Create a QR code image
+        qr = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.constants.ERROR_CORRECT_L,
+            box_size=10,
+            border=4,
+        )
+        qr.add_data(qr_code_data)
+        qr.make(fit=True)
+
+        img = qr.make_image(fill_color="black", back_color="white")
+
+        # Convert to base64
+        buffered = io.BytesIO()
+        img.save(buffered)
+        img_str = base64.b64encode(buffered.getvalue()).decode("ascii")
+
+        return QRCode(data=img_str, code=qr_code_data)
 
     async def authenticate_qr(self, qr_code: str) -> bool:
         """Authenticate using QR code.

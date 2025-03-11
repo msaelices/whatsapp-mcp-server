@@ -74,9 +74,6 @@ The server communicates through standard input/output streams using the Model Co
 ### Available Tools
 
 - `create_session`: Create a new WhatsApp session
-- `get_qr_code`: Get a QR code for authentication
-- `authenticate`: Authenticate using a QR code
-- `logout`: Logout from a session
 - `send_message`: Send a message to a chat
 - `get_chats`: Get a list of chats
 - `create_group`: Create a new WhatsApp group

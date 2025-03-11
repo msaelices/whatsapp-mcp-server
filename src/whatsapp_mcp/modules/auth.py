@@ -10,11 +10,15 @@ import time
 from typing import Dict, Optional, Tuple, Any
 
 import qrcode
+from dotenv import load_dotenv
 
 from whatsapp_mcp.models import QRCode
 
 # Import the WhatsApp API client
 from whatsapp_api_client_python import API
+
+# Load environment variables
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 
@@ -33,8 +37,15 @@ class WhatsAppClient:
         """Initialize the client."""
         logger.info("Initializing WhatsApp client")
         try:
-            # Initialize the WhatsApp API client
-            self.client = API()
+            # Initialize the WhatsApp API client with GreenAPI credentials from environment variables
+            id_instance = os.getenv("GREENAPI_ID_INSTANCE")
+            api_token_instance = os.getenv("GREENAPI_API_TOKEN")
+            
+            if not id_instance or not api_token_instance:
+                logger.error("Missing required environment variables: GREENAPI_ID_INSTANCE or GREENAPI_API_TOKEN")
+                return False
+                
+            self.client = API(idInstance=id_instance, apiTokenInstance=api_token_instance)
             return True
         except Exception as e:
             logger.error(f"Failed to initialize WhatsApp client: {e}")

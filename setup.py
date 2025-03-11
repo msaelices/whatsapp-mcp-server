@@ -29,6 +29,7 @@ setup(
         "click>=8.0.0",
         "mcp>=1.3.0",
         "whatsapp-api-client-python==0.0.49",
+        "python-dotenv>=1.0.0",
     ],
     entry_points={
         "console_scripts": [

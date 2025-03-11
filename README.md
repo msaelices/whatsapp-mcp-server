@@ -4,19 +4,12 @@ A server that provides a Model Context Protocol (MCP) interface to interact with
 
 ## Introduction
 
-WhatsApp MCP Server is a Python implementation that enables language models like Claude to interact with WhatsApp functionality through a standardized protocol. It provides capabilities for:
-
-- Authentication via QR code
-- Sending various types of messages (text, media, locations, etc.)
-- Managing WhatsApp groups
-- Listing chats and contacts
+WhatsApp MCP Server is a Python implementation that enables language models like Claude to interact with WhatsApp functionality through [GreenAPI](https://green-api.com/).
 
 ## Features
 
-- **Authentication**: Authenticate with WhatsApp using QR code scanning
-- **Messaging**: Send text, media, interactive, and location messages
+- **Messaging**: Send text messages
 - **Group Management**: Create groups, list members, add/remove participants
-- **Session Management**: Create, restore, and manage multiple WhatsApp sessions
 
 ## WhatsApp API Client
 
@@ -68,7 +61,7 @@ The server communicates through standard input/output streams using the Model Co
 
 ### Available Tools
 
-- `create_session`: Create a new WhatsApp session
+- `open_session`: Open a new WhatsApp session
 - `send_message`: Send a message to a chat
 - `get_chats`: Get a list of chats
 - `create_group`: Create a new WhatsApp group

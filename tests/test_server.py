@@ -11,7 +11,7 @@ from whatsapp_mcp.server import WhatsAppTools
 async def test_whatsapp_tools_enum():
     """Test the WhatsAppTools enum."""
     # Check that all expected tools are defined
-    assert WhatsAppTools.CREATE_SESSION == "create_session"
+    assert WhatsAppTools.OPEN_SESSION == "open_session"
     assert WhatsAppTools.SEND_MESSAGE == "send_message"
     assert WhatsAppTools.GET_CHATS == "get_chats"
     assert WhatsAppTools.CREATE_GROUP == "create_group"
@@ -20,18 +20,18 @@ async def test_whatsapp_tools_enum():
 
 @pytest.mark.asyncio
 @patch("whatsapp_mcp.modules.auth.auth_manager")
-async def test_create_session(mock_auth_manager):
-    """Test create_session implementation."""
+async def test_open_session(mock_auth_manager):
+    """Test open_session implementation."""
     # Set up mock response
-    mock_auth_manager.create_session = AsyncMock(
-        return_value=(True, "Session created successfully")
+    mock_auth_manager.open_session = AsyncMock(
+        return_value=(True, "Session opened successfully")
     )
 
     # Import function here to avoid early evaluation
     from whatsapp_mcp.server import call_tool
 
-    # Call the function with create_session arguments
-    result = await call_tool("create_session")
+    # Call the function with open_session arguments
+    result = await call_tool("open_session")
 
     # Verify result
     assert len(result) == 1
@@ -53,9 +53,8 @@ async def test_list_tools():
     tool_names = [tool.name for tool in tools]
 
     # Check that all expected tools are in the list
-    assert "create_session" in tool_names
+    assert "open_session" in tool_names
     assert "send_message" in tool_names
     assert "get_chats" in tool_names
     assert "create_group" in tool_names
     assert "get_group_participants" in tool_names
-

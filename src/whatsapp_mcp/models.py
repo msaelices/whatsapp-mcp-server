@@ -196,10 +196,3 @@ class MCP_Message(BaseModel):
 
     type: MCP_MessageType
     content: TextContent | ToolCall | dict[str, Any] | str | None = None
-
-
-class QRCode(BaseModel):
-    """QR Code for authentication."""
-
-    data: str  # Base64 encoded image
-    code: str  # The actual QR code text

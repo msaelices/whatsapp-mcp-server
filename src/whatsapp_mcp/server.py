@@ -25,7 +25,7 @@ class WhatsAppTools(str, Enum):
     """WhatsApp MCP tools."""
 
     LIST_TOOLS = "list_tools"
-    CREATE_SESSION = "create_session"
+    OPEN_SESSION = "open_session"
     SEND_MESSAGE = "send_message"
     GET_CHATS = "get_chats"
     CREATE_GROUP = "create_group"
@@ -33,7 +33,7 @@ class WhatsAppTools(str, Enum):
 
 
 class CreateSessionModel(BaseModel):
-    """Input schema for create_session tool."""
+    """Input schema for open_session tool."""
 
     pass
 
@@ -54,8 +54,8 @@ async def list_tools() -> list[Tool]:
     """List available tools."""
     return [
         Tool(
-            name=WhatsAppTools.CREATE_SESSION,
-            description="Create a new WhatsApp session",
+            name=WhatsAppTools.OPEN_SESSION,
+            description="Open a new WhatsApp session",
             inputSchema=CreateSessionModel.model_json_schema(),
         ),
         Tool(
@@ -85,9 +85,9 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
     """Call a tool with the given arguments."""
     try:
         match name:
-            case WhatsAppTools.CREATE_SESSION:
-                # Create a new session
-                success, message_text = await auth.auth_manager.create_session()
+            case WhatsAppTools.OPEN_SESSION:
+                # Open a new session
+                success, message_text = await auth.auth_manager.open_session()
                 if success:
                     return [TextContent(type="text", text=f"Success: {message_text}")]
                 else:

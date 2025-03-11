@@ -115,9 +115,9 @@ flake8 src/
 mypy src/
 ```
 
-The setup.py file reads requirements from:
-- `requirements.txt` - Core dependencies for running the application
-- `dev-requirements.txt` - Additional dependencies for development and testing
+The project uses a modern `pyproject.toml` configuration which includes:
+- Core dependencies needed for running the application
+- Development dependencies available with `pip install -e ".[dev]"`
 
 ## License
 

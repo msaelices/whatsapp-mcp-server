@@ -42,12 +42,12 @@ async def send_message(
         message_data = {}
         content_type = getattr(content, "type", "text")
         
-        if content_type == "text":
+        if content_type == "text" and isinstance(content, TextContent):
             message_data = {
                 "to": chat_id,
                 "text": {"body": content.text}
             }
-        elif content_type in ("image", "document", "audio", "video", "sticker"):
+        elif content_type in ("image", "document", "audio", "video", "sticker") and isinstance(content, MediaContent):
             message_data = {
                 "to": chat_id,
                 "type": content_type,
@@ -61,13 +61,13 @@ async def send_message(
                 message_data[content_type]["base64"] = content.data
             
             # Add caption for media if provided
-            if hasattr(content, "caption") and content.caption:
+            if content.caption:
                 message_data[content_type]["caption"] = content.caption
             
             # Add filename for documents if provided
             if content_type == "document" and content.filename:
                 message_data[content_type]["filename"] = content.filename
-        elif content_type == "location":
+        elif content_type == "location" and isinstance(content, LocationContent):
             message_data = {
                 "to": chat_id,
                 "type": "location",
@@ -81,7 +81,7 @@ async def send_message(
                 message_data["location"]["name"] = content.name
             if content.address:
                 message_data["location"]["address"] = content.address
-        elif content_type == "contact":
+        elif content_type == "contact" and isinstance(content, ContactContent):
             message_data = {
                 "to": chat_id,
                 "type": "contacts",
@@ -101,7 +101,7 @@ async def send_message(
                     "email": content.email,
                     "type": "WORK"
                 }]
-        elif content_type == "buttons":
+        elif content_type == "buttons" and isinstance(content, ButtonsContent):
             # Interactive message with buttons
             message_data = {
                 "to": chat_id,
@@ -124,7 +124,7 @@ async def send_message(
                     }
                 }
             }
-        elif content_type == "list":
+        elif content_type == "list" and isinstance(content, ListContent):
             # Interactive message with list
             message_data = {
                 "to": chat_id,
@@ -151,7 +151,7 @@ async def send_message(
                     }
                 }
             }
-        elif content_type == "poll":
+        elif content_type == "poll" and isinstance(content, PollContent):
             # Poll message (may not be directly supported by the API)
             # Implement based on API capabilities
             message_data = {

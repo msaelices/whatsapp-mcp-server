@@ -26,9 +26,9 @@ logger = logging.getLogger(__name__)
 class WhatsAppClient:
     """WhatsApp client implementation using whatsapp-api-client-python."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.is_authenticated = False
-        self.session_data = {}
+        self.session_data: Dict[str, Any] = {}
         self.client = None
         self.qr_code = None
         self.state = "DISCONNECTED"
@@ -60,7 +60,7 @@ class WhatsAppClient:
             return None
 
         # Start a new session with the WhatsApp API
-        response = await asyncio.to_thread(self.client.start_session)
+        await asyncio.to_thread(self.client.start_session)
 
         # Wait for the QR code to be generated
         qr_code_data = None
@@ -170,7 +170,7 @@ class WhatsAppClient:
 
         try:
             # Close the session
-            response = await asyncio.to_thread(self.client.logout_session)
+            await asyncio.to_thread(self.client.logout_session)
             self.is_authenticated = False
             self.state = "DISCONNECTED"
             self.session_data = {}
@@ -198,14 +198,14 @@ class WhatsAppClient:
 class AuthManager:
     """Manager for authentication-related operations."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.sessions: Dict[str, WhatsAppClient] = {}
         self.session_path = os.path.join(
             os.path.expanduser("~"), ".whatsapp-mcp-sessions"
         )
         self._ensure_session_dir()
 
-    def _ensure_session_dir(self):
+    def _ensure_session_dir(self) -> None:
         """Ensure the session directory exists."""
         os.makedirs(self.session_path, exist_ok=True)
 

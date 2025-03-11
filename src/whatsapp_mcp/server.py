@@ -230,12 +230,12 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
                 
                 try:
                     create_group_args = CreateGroup.model_validate(arguments)
-                    result = await group.create_group(
+                    group_result = await group.create_group(
                         session_id=session_id,
                         group_name=create_group_args.group_name,
                         participants=create_group_args.participants
                     )
-                    return [TextContent(type="text", text=json.dumps(result.model_dump()))]
+                    return [TextContent(type="text", text=json.dumps(group_result.model_dump()))]
                 except ValidationError as e:
                     return [TextContent(type="text", text=f"Error: Invalid arguments: {e}")]
                 except Exception as e:
@@ -268,10 +268,10 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         return [TextContent(type="text", text=f"Error: {str(e)}")]
 
 
-async def serve():
+async def serve() -> None:
     """Run the WhatsApp MCP server."""
     logger.info("Starting WhatsApp MCP Server")
-    server = Server("whatsapp-mcp")
+    server: Server = Server("whatsapp-mcp")
     
     @server.list_tools()
     async def server_list_tools() -> list[Tool]:

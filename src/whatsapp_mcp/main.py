@@ -20,12 +20,12 @@ logger = logging.getLogger(__name__)
 @click.command()
 @click.version_option()
 @click.option("--debug", is_flag=True, default=False, help="Enable debug logging")
-def main(debug):
+def main(debug: bool) -> None:
     """WhatsApp MCP Server - A server that provides a Model Context Protocol interface to interact with WhatsApp Business API."""
     # Set logging level
     if debug:
         logging.getLogger().setLevel(logging.DEBUG)
-    
+        
     # Run the server
     try:
         asyncio.run(serve())

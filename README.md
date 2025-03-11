@@ -119,8 +119,6 @@ Send the "Hello" message to John Doe
 ```bash
 # Install development dependencies
 pip install -e ".[dev]"
-# Alternatively, you can use the dev-requirements.txt
-# pip install -r dev-requirements.txt
 
 # Run tests
 pytest
@@ -131,6 +129,10 @@ flake8 src/
 # Run type checking
 mypy src/
 ```
+
+The setup.py file reads requirements from:
+- `requirements.txt` - Core dependencies for running the application
+- `dev-requirements.txt` - Additional dependencies for development and testing
 
 ## License
 

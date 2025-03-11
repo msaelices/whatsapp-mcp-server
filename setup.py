@@ -1,9 +1,18 @@
 """Setup script for WhatsApp MCP Server."""
 
 from setuptools import find_packages, setup
+import os
 
 with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
+
+# Read requirements from files
+def read_requirements(filename):
+    with open(filename, "r") as f:
+        return [line.strip() for line in f if line.strip() and not line.startswith("#")]
+
+install_requires = read_requirements("requirements.txt")
+dev_requires = read_requirements("dev-requirements.txt")
 
 setup(
     name="whatsapp-mcp-server",
@@ -22,24 +31,9 @@ setup(
         "Operating System :: OS Independent",
     ],
     python_requires=">=3.10",
-    install_requires=[
-        "pydantic>=2.0.0",
-        "qrcode>=7.0",
-        "Pillow>=9.0.0",
-        "click>=8.0.0",
-        "mcp>=1.3.0",
-        "whatsapp-api-client-python==0.0.49",
-        "python-dotenv>=1.0.0",
-    ],
+    install_requires=install_requires,
     extras_require={
-        "dev": [
-            "pytest>=7.0.0",
-            "pytest-asyncio>=0.25.3",
-            "mypy>=1.0.0",
-            "flake8>=6.0.0",
-            "isort>=5.0.0",
-            "black>=23.0.0",
-        ],
+        "dev": dev_requires,
     },
     entry_points={
         "console_scripts": [

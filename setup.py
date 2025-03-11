@@ -31,6 +31,16 @@ setup(
         "whatsapp-api-client-python==0.0.49",
         "python-dotenv>=1.0.0",
     ],
+    extras_require={
+        "dev": [
+            "pytest>=7.0.0",
+            "pytest-asyncio>=0.25.3",
+            "mypy>=1.0.0",
+            "flake8>=6.0.0",
+            "isort>=5.0.0",
+            "black>=23.0.0",
+        ],
+    },
     entry_points={
         "console_scripts": [
             "whatsapp-mcp=whatsapp_mcp.main:main",

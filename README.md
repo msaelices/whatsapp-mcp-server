@@ -99,6 +99,55 @@ Login to WhatsApp
 Send the "Hello" message to John Doe
 ```
 
+## Using with Claude Desktop
+
+To use the WhatsApp MCP server with Claude Desktop, you need to add it to your `claude_desktop_config.json` file:
+
+### Using pip installation (recommended)
+
+```json
+"mcpServers": {
+  "whatsapp": {
+    "command": "python",
+    "args": ["-m", "whatsapp_mcp"]
+  }
+}
+```
+
+### Using the executable
+
+```json
+"mcpServers": {
+  "whatsapp": {
+    "command": "whatsapp-mcp"
+  }
+}
+```
+
+### Using Docker
+
+```json
+"mcpServers": {
+  "whatsapp": {
+    "command": "docker",
+    "args": ["run", "--rm", "-i", "-e", "GREENAPI_ID_INSTANCE=your_instance_id", "-e", "GREENAPI_API_TOKEN=your_api_token", "whatsapp-mcp-server"]
+  }
+}
+```
+
+Remember to set your GreenAPI credentials either as environment variables or in your `.env` file before starting Claude Desktop.
+
+### Command-line options
+
+The WhatsApp MCP server accepts these command-line arguments:
+- `--debug`: Increase verbosity level for debugging
+
+### Debugging
+
+For debugging the MCP server:
+- Use MCP inspector: `npx @modelcontextprotocol/inspector whatsapp-mcp`
+- View logs in your Claude Desktop logs directory (typically `~/Library/Logs/Claude/` on macOS)
+
 ## Development
 
 ```bash

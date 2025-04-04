@@ -28,16 +28,16 @@ def test_send_message():
     """Test SendMessage model."""
     # With text content
     message = SendMessage(
-        chat_id="1234567890@c.us",
-        content=TextContent(text="Hello, world!")
+        phone_number="1234567890@c.us",
+        content="Hello, world!"
     )
-    assert message.chat_id == "1234567890@c.us"
-    assert message.content.text == "Hello, world!"
+    assert message.phone_number == "1234567890@c.us"
+    assert message.content == "Hello, world!"
     
     # With reply_to
     message = SendMessage(
-        chat_id="1234567890@c.us",
-        content=TextContent(text="Hello, world!"),
+        phone_number="1234567890@c.us",
+        content="Hello, world!",
         reply_to="msg_1234abcd"
     )
     assert message.reply_to == "msg_1234abcd"

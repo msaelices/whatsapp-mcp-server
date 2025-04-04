@@ -23,6 +23,7 @@ dependencies = [
     "Pillow>=9.0.0",
     "click>=8.0.0",
     "mcp>=1.3.0",
+    "fastmcp>=0.1.0",
     "whatsapp-api-client-python==0.0.49",
     "python-dotenv>=1.0.0",
 ]

@@ -1,18 +1,17 @@
 #!/usr/bin/env python3
 """Entry point for WhatsApp MCP Server."""
 
-import asyncio
 import logging
 import sys
 
 import click
 
-from whatsapp_mcp.server import serve
+from whatsapp_mcp.server import mcp
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[logging.StreamHandler()]
+    handlers=[logging.StreamHandler()],
 )
 logger = logging.getLogger(__name__)
 
@@ -25,10 +24,10 @@ def main(debug: bool) -> None:
     # Set logging level
     if debug:
         logging.getLogger().setLevel(logging.DEBUG)
-        
+
     # Run the server
     try:
-        asyncio.run(serve())
+        mcp.run()
     except KeyboardInterrupt:
         logger.info("Server stopped by user")
     except Exception as e:
@@ -38,3 +37,4 @@ def main(debug: bool) -> None:
 
 if __name__ == "__main__":
     main()  # pylint: disable=no-value-for-parameter
+

@@ -6,6 +6,19 @@ from typing import Any, Dict, List, Union
 from pydantic import BaseModel, Field
 
 
+class CreateSessionModel(BaseModel):
+    """Input schema for open_session tool."""
+
+    pass
+
+
+class GetChatsModel(BaseModel):
+    """Input schema for get_chats tool."""
+
+    limit: int = Field(50, description="Maximum number of chats to return")
+    offset: int = Field(0, description="Offset for pagination")
+
+
 class MCP_MessageType(str, Enum):
     TEXT = "text"
     TOOL_CALL = "tool_call"

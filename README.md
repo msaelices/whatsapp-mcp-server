@@ -1,15 +1,17 @@
 # WhatsApp MCP Server
 
-A server that provides a Model Context Protocol (MCP) interface to interact with WhatsApp Business API.
+A server that provides a Model Context Protocol (MCP) interface to interact with WhatsApp Business API using FastMCP.
 
 ## Introduction
 
-WhatsApp MCP Server is a Python implementation that enables language models like Claude to interact with WhatsApp functionality through [GreenAPI](https://green-api.com/).
+WhatsApp MCP Server is a Python implementation that enables language models like Claude to interact with WhatsApp functionality through [GreenAPI](https://green-api.com/). It leverages FastMCP for improved performance, better developer experience, and a cleaner implementation.
 
 ## Features
 
-- **Messaging**: Send text messages
+- **Messaging**: Send text messages to WhatsApp contacts
 - **Group Management**: Create groups, list members, add/remove participants
+- **Session Handling**: Manage WhatsApp API sessions
+- **Chat History**: Retrieve chat lists and message history
 
 ## WhatsApp API Client
 
@@ -44,11 +46,11 @@ cp .env-template .env
 Run the MCP server:
 
 ```bash
-# Install the package with development mode
-pip install -e .
-
-# Run the MCP server
+# Run the MCP server on default host (127.0.0.1) and port (8000)
 whatsapp-mcp
+
+# Specify host and port
+whatsapp-mcp --host 0.0.0.0 --port 9000
 ```
 
 For debugging:
@@ -57,7 +59,7 @@ For debugging:
 whatsapp-mcp --debug
 ```
 
-The server communicates through standard input/output streams using the Model Context Protocol (MCP).
+The server communicates using the Model Context Protocol (MCP) and can be accessed via HTTP or WebSockets when running with FastMCP.
 
 ### Available Tools
 
@@ -67,11 +69,30 @@ The server communicates through standard input/output streams using the Model Co
 - `create_group`: Create a new WhatsApp group
 - `get_group_participants`: Get the participants of a group
 
+## FastMCP API Reference
+
+The WhatsApp MCP Server uses FastMCP to provide both WebSocket and HTTP endpoints:
+
+- WebSocket: `ws://localhost:8000/mcp`
+- HTTP: `http://localhost:8000/mcp`
+
+You can test the API directly using tools like curl:
+
+```bash
+# List available tools
+curl -X POST http://localhost:8000/mcp/listTools
+
+# Call a tool
+curl -X POST http://localhost:8000/mcp/callTool \
+  -H "Content-Type: application/json" \
+  -d '{"name": "open_session", "arguments": {}}'
+```
+
 ## How to add it to Claude Code
 
 To add a WhatsApp server to Claude, use the `claude mcp add` command:
 
-```
+```bash
 # Add the WhatsApp MCP server
 $ claude mcp add whatsapp -- whatsapp-mcp
 
@@ -91,7 +112,6 @@ Once the WhatsApp MCP server is running, you can interact with it using Claude i
 ```
 Login to WhatsApp
 ```
-
 
 ### Sending a message
 
@@ -141,12 +161,15 @@ Remember to set your GreenAPI credentials either as environment variables or in 
 
 The WhatsApp MCP server accepts these command-line arguments:
 - `--debug`: Increase verbosity level for debugging
+- `--host`: Host to bind the server to (default: 127.0.0.1)
+- `--port`: Port to bind the server to (default: 8000)
 
 ### Debugging
 
 For debugging the MCP server:
 - Use MCP inspector: `npx @modelcontextprotocol/inspector whatsapp-mcp`
 - View logs in your Claude Desktop logs directory (typically `~/Library/Logs/Claude/` on macOS)
+- Access the FastMCP web interface at http://localhost:8000 for interactive API documentation
 
 ## Development
 
